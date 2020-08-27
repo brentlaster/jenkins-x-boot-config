@@ -13,13 +13,28 @@ velero:
   credentials:
     useSecret: true
     existingSecret: velero-secret
+  snapshotsEnabled: false
 {{- if eq .Requirements.cluster.provider "gke" }}
+  initContainers:
+  - name: velero-plugin-for-gcp
+    image: velero/velero-plugin-for-gcp:v1.0.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /target
+      name: plugins
   configuration:
     provider: gcp
     backupStorageLocation:
       name: gcp
       bucket: {{ .Requirements.storage.backup.url | removeScheme | quote }}
 {{- else if or (eq .Requirements.cluster.provider "aws") (eq .Requirements.cluster.provider "eks") }}
+  initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.0.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /target
+      name: plugins
   configuration:
     provider: aws
     backupStorageLocation:
@@ -27,16 +42,30 @@ velero:
       bucket: {{ .Requirements.storage.backup.url | removeScheme | quote }}
       config:
         region: {{ .Requirements.cluster.region | quote }}
-{{- else if eq .Requirements.cluster.provider "azure" }}
+{{- else if and (eq .Requirements.cluster.provider "aks") (hasKey .Requirements.velero "namespace") }}
+  initContainers:
+  - name: velero-plugin-for-azure
+    image: velero/velero-plugin-for-microsoft-azure:v1.0.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /target
+      name: plugins
   configuration:
     provider: azure
     backupStorageLocation:
       name: azure
-      bucket: {{ .Requirements.storage.backup.url | removeScheme | quote }}
+      bucket: {{ .Requirements.velero.bucketName | removeScheme | quote }}
       config:
         storageAccount: {{ .Requirements.velero.serviceAccount | quote }}
+        resourceGroup: {{ .Requirements.velero.resourceGroup | quote }}
 {{- else if eq .Requirements.cluster.provider "iks" }}
-  snapshotsEnabled: false
+  initContainers:
+  - name: velero-plugin-for-aws
+    image: velero/velero-plugin-for-aws:v1.0.0
+    imagePullPolicy: IfNotPresent
+    volumeMounts:
+    - mountPath: /target
+      name: plugins
   configuration:
     provider: aws
     backupStorageLocation:
